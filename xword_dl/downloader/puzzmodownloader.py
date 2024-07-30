@@ -18,7 +18,7 @@ class PuzzmoDownloader(BaseDownloader):
         self.session.headers.update({'Puzzmo-Gameplay-Id':
                                         self.temporary_user_id})
 
-    def find_latest(self):
+    def _get_slug_for_puzzle(self, puzzleSlug=None):
         query = """mutation PlayGameRedirectScreenMutation(
                     $gameSlug: String!
                     $puzzleSlug: String
@@ -32,7 +32,7 @@ class PuzzmoDownloader(BaseDownloader):
                 }"""
 
         variables = {'gameSlug': 'crossword',
-                     'puzzleSlug': None,
+                     'puzzleSlug': puzzleSlug,
                      'tempraryUserID': self.temporary_user_id,
                      'partnerSlug': None}
 
@@ -47,6 +47,50 @@ class PuzzmoDownloader(BaseDownloader):
         slug = redirect_res.json()['data']['startPlayingGame']['slug']
 
         return f'https://www.puzzmo.com/play/crossword/{slug}'
+
+    def find_latest(self):
+        return self._get_slug_for_puzzle()
+
+    def find_by_date(self, dt):
+        query = """query TodayScreenQuery(
+                     $day: String
+                   ) {
+                     todayPage(day: $day, applyAccessControls: false) {
+                       daily {
+                         puzzles {
+                           puzzle {
+                             slug
+                             name
+                             game {
+                               slug
+                             }
+                           }
+                         }
+                       }
+                     }
+                   }"""
+        self.date = dt
+        variables = {"day": dt.strftime("%Y-%m-%d")}
+        payload = {
+            "operationName": "TodayScreenQuery",
+            "query": query,
+            "variables": variables
+        }
+
+        r = self.session.post("https://www.puzzmo.com/_api/prod/graphql?TodayScreenQuery", json=payload)
+        puzzles = r.json()["data"]["todayPage"]["daily"]["puzzles"]
+        xword = next(
+            (
+                puzzle
+                for puzzle in puzzles
+                if puzzle["puzzle"]["game"]["slug"] == "crossword"
+            ),
+            None,
+        )
+        if xword:
+            return self._get_slug_for_puzzle(xword["puzzle"]["slug"])
+        else:
+            raise XWordDLException("Could not find a puzzle for date.")
 
     def find_solver(self, url):
         return url
@@ -90,8 +134,9 @@ class PuzzmoDownloader(BaseDownloader):
 
         res = self.session.post('https://www.puzzmo.com/_api/prod/graphql?PlayGameScreenQuery', json=payload)
 
-        self.date = dateparser.parse(
-                res.json()['data']['todaysDaily']['dayString'])
+        if not self.date:
+            self.date = dateparser.parse(
+                    res.json()['data']['todaysDaily']['dayString'])
 
         return res.json()['data']['gamePlay']['puzzle']
 
