@@ -2,7 +2,6 @@ import re
 import secrets
 
 import dateparser
-import puz
 
 from .basedownloader import BaseDownloader
 from ..util import join_bylines
@@ -97,10 +96,8 @@ class PuzzmoDownloader(BaseDownloader):
         return res.json()['data']['gamePlay']['puzzle']
 
     def parse_xword(self, xw_data):
-        puzzle = puz.Puzzle()
-
-        puzzle.title = xw_data.get('name','')
-        puzzle.author = join_bylines([a['name'] for a in xw_data['authors']])
+        self.puzzle.title = xw_data.get('name','')
+        self.puzzle.author = join_bylines([a['name'] for a in xw_data['authors']])
         puzzle_lines = [l.strip() for l in xw_data['puzzle'].splitlines()]
 
         section = None
@@ -138,12 +135,12 @@ class PuzzmoDownloader(BaseDownloader):
                 # less reliable than the other API-provided fields, so we will
                 # only fall back to them.
 
-                    if k == 'title' and not puzzle.title:
-                        puzzle.title = v
-                    elif k == 'author' and not puzzle.author:
-                        puzzle.author = v
+                    if k == 'title' and not self.puzzle.title:
+                        self.puzzle.title = v
+                    elif k == 'author' and not self.puzzle.author:
+                        self.puzzle.author = v
                     elif k == 'copyright':
-                        puzzle.copyright = v.strip(' ©')
+                        self.puzzle.copyright = v.strip(' ©')
 
             elif section == 'grid':
                 if not observed_width:
@@ -175,18 +172,18 @@ class PuzzmoDownloader(BaseDownloader):
                         markup += b'\x00' if c in '#.' else b'\x80'
 
 
-        puzzle.height = observed_height
-        puzzle.width = observed_width
-        puzzle.solution = solution
-        puzzle.fill = fill
+        self.puzzle.height = observed_height
+        self.puzzle.width = observed_width
+        self.puzzle.solution = solution
+        self.puzzle.fill = fill
 
         if b'\x80' in markup:
-            puzzle.extensions[b'GEXT'] = markup
-            puzzle._extensions_order.append(b'GEXT')
-            puzzle.markup()
+            self.puzzle.extensions[b'GEXT'] = markup
+            self.puzzle._extensions_order.append(b'GEXT')
+            self.puzzle.markup()
 
         clue_list.sort(key=lambda c: (c[1], c[0]))
 
-        puzzle.clues = [c[2].split(' ~ ')[0].strip() for c in clue_list]
+        self.puzzle.clues = [c[2].split(' ~ ')[0].strip() for c in clue_list]
 
-        return puzzle
+        return self.puzzle
