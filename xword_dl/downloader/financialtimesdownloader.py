@@ -59,9 +59,9 @@ class FinancialTimesDownloader(BaseDownloader):
             raise XWordDLException("Unable to decrypt payload.")
         return xword_data
 
-    def parse_xword(self, xword_data):
+    def parse_xword(self, xw_data):
         puzzles = []
-        for puzzle in xword_data["Items"]:
+        for puzzle in xw_data["Items"]:
             if puzzle["crossword_type"] != self.crossword_type:
                 continue
             if self.selected_date:
@@ -74,8 +74,7 @@ class FinancialTimesDownloader(BaseDownloader):
             raise XWordDLException("No valid puzzles found.")
 
         # either only one puzzle matches, or we choose the most recent puzzle
-        puzzles.sort(key=lambda x: x["crossword_timestamp"])
-        xword_data = puzzles[-1]
+        xword_data = max(puzzles, key=lambda x: x["crossword_timestamp"])
         xword = json.loads(xword_data["crossword"])
 
         puzzle = puz.Puzzle()
