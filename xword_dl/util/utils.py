@@ -116,7 +116,10 @@ def read_config_values(heading: str):
 def decrypt_aes(ciphertext: bytes, key: bytes, iv: bytes, mode=AES.MODE_CBC, pad="pkcs7") -> bytes:
     """Decrypt an AES-encrypted ciphertext with a specified key and IV."""
 
+    # we assume a key+iv mode was used
+    assert mode in (AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB)
     cipher = AES.new(key, mode, iv)
+
     plaintext = cipher.decrypt(ciphertext)
     if pad:
         plaintext = unpad(plaintext, AES.block_size, pad)
