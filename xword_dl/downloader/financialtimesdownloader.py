@@ -1,6 +1,5 @@
 import json
 
-import puz
 import requests
 
 from base64 import b64decode
@@ -77,19 +76,18 @@ class FinancialTimesDownloader(BaseDownloader):
         xword_data = max(puzzles, key=lambda x: x["crossword_timestamp"])
         xword = json.loads(xword_data["crossword"])
 
-        puzzle = puz.Puzzle()
-        puzzle.title = "Financial Times {}: {}".format(
+        self.puzzle.title = "Financial Times {}: {}".format(
             self.crossword_type.replace("_", " ").title(),
             xword_data["crossword_id"],
         )
-        puzzle.author = xword_data.get("author")
-        puzzle.width, puzzle.height = (
+        self.puzzle.author = xword_data.get("author")
+        self.puzzle.width, self.puzzle.height = (
             int(x) for x in xword_data["dimensions"].split("x")
         )
 
         # Extract clues and answers
         clues = []
-        grid = [["."] * puzzle.width for _ in range(puzzle.height)]
+        grid = [["."] * self.puzzle.width for _ in range(self.puzzle.height)]
         for direction in ("across", "down"):
             for _, clue in sorted(xword[direction].items(), key=lambda x: int(x[0])):
                 text = clue["clue"]
@@ -106,15 +104,15 @@ class FinancialTimesDownloader(BaseDownloader):
 
         # clues are sorted by (rol, col), which is the same order as clue number
         # assumes stable sort: across clues should sort before down clues
-        puzzle.clues = [clue[0] for clue in sorted(clues, key=lambda x: x[1])]
+        self.puzzle.clues = [clue[0] for clue in sorted(clues, key=lambda x: x[1])]
 
-        puzzle.solution = "".join(["".join(row) for row in grid])
-        puzzle.fill = "".join(["." if c == "." else "-" for c in puzzle.solution])
+        self.puzzle.solution = "".join(["".join(row) for row in grid])
+        self.puzzle.fill = "".join(["." if c == "." else "-" for c in self.puzzle.solution])
 
         if "author_message" in xword_data:
-            puzzle.notes = xword_data["author_message"]
+            self.puzzle.notes = xword_data["author_message"]
 
-        return puzzle
+        return self.puzzle
 
     @staticmethod
     def __get_aes_keyiv(lm):
