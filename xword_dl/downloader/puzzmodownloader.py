@@ -4,7 +4,7 @@ import secrets
 import dateparser
 
 from .basedownloader import BaseDownloader
-from ..util import join_bylines
+from ..util import join_bylines, XWordDLException
 
 class PuzzmoDownloader(BaseDownloader):
     command = 'pzm'
