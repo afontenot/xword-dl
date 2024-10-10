@@ -8,6 +8,8 @@ import yaml
 from puz import Puzzle
 from unidecode import unidecode
 
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 from html2text import html2text
 
 
@@ -109,3 +111,32 @@ def read_config_values(heading: str):
     subsettings = {k.replace('-','_'):raw_subsettings[k] for k in raw_subsettings}
 
     return subsettings
+
+
+def decrypt_aes(ciphertext: bytes, key: bytes, iv: bytes, mode=AES.MODE_CBC, pad="pkcs7") -> bytes:
+    """Decrypt an AES-encrypted ciphertext with a specified key and IV."""
+
+    # we assume a key+iv mode was used
+    assert mode in (AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB)
+    cipher = AES.new(key, mode, iv)
+
+    plaintext = cipher.decrypt(ciphertext)
+    if pad:
+        plaintext = unpad(plaintext, AES.block_size, pad)
+    return plaintext
+
+
+def base_n_fmt(number: int, base: int) -> str:
+    """Print a (positive) number in an arbitrary base (up to 36)."""
+
+    if number <= 0 or base < 2 or base > 36:
+        raise ValueError("Invalid parameters for base conversion.")
+
+    result = ""
+    while number != 0:
+        number, remainder = divmod(number, base)
+        if remainder < 10:
+            result += str(remainder)
+        else:
+            result += chr(remainder + 87)
+    return result[::-1]
