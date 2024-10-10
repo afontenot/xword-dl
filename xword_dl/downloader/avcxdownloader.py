@@ -4,7 +4,8 @@ from urllib.parse import urljoin
 
 import puz
 import requests
-from bs4 import BeautifulSoup as bs
+from bs4 import BeautifulSoup as bs, Tag
+from getpass import getpass
 
 from .basedownloader import BaseDownloader
 from ..util import XWordDLException, update_config_file, parse_date
@@ -25,13 +26,13 @@ class AVCXBaseDownloader(BaseDownloader):
 
         self.session = requests.Session()
 
+        username = self.settings.get("username")
+        password = self.settings.get("password")
+        if username and password:
+            self.authenticate(username, password)
+
         user_t = self.settings.get("AVCX_USER")
         token_t = self.settings.get("AVCX_TOKEN")
-        if not user_t or not token_t:
-            username = self.settings.get("username")
-            password = self.settings.get("password")
-            if username and password:
-                user_t, token_t = self.authenticate(username, password)
 
         if not user_t or not token_t:
             raise XWordDLException(
@@ -41,14 +42,18 @@ class AVCXBaseDownloader(BaseDownloader):
             self.session.cookies.set("PA_AUS", user_t)
             self.session.cookies.set("PA_ATOK", token_t)
 
-    @staticmethod
-    def matches_url(url_components):
+    @classmethod
+    def matches_url(cls, url_components):
         return "avxwords.com" in url_components.netloc and (
             "puzzles" in url_components.path or "download-puzzle" in url_components.path
         )
 
-    def authenticate(self, username, password):
+    @classmethod
+    def authenticate(cls, username, password):
         """Given an AVCX username and password, return username-based login token"""
+
+        username = username or input("AVCX email address: ")
+        password = password or getpass("Password: ")
 
         try:
             res = requests.post(
@@ -67,7 +72,6 @@ class AVCXBaseDownloader(BaseDownloader):
         if user_t and token_t:
             update_config_file("avcx", {"AVCX-USER": user_t})
             update_config_file("avcx", {"AVCX-TOKEN": token_t})
-            return (user_t, token_t)
         else:
             raise XWordDLException("No login token found in authentication response.")
 
@@ -103,6 +107,8 @@ class AVCXBaseDownloader(BaseDownloader):
         for row in puzzle_list.find_all("li", class_="row"):
             date = row.find("span", class_="puzzle-date").text.strip()
             row_dt = parse_date(date)
+            if row_dt is None:
+                raise XWordDLException("Error parsing date in downloaded puzzle list.")
             if row_dt.date() == dt.date():
                 url = row.find("a").get("href")
                 return urljoin(self.base_url, url)
@@ -137,16 +143,15 @@ class AVCXBaseDownloader(BaseDownloader):
 
         soup = bs(res.text, "lxml")
 
-        difficulty_l = soup.find(
-            "span",
-            class_="difficulty",
-        ).get("aria-label")
-        if difficulty_l:
-            difficulty = difficulty_l.split()[0]
-            self._descriptions.append(f"Difficulty: {difficulty}.")
+        difficulty_tag = soup.find("span", class_="difficulty")
+        if isinstance(difficulty_tag, Tag):
+            difficulty_l = difficulty_tag.get("aria-label")
+            if isinstance(difficulty_l, str):
+                difficulty = difficulty_l.split()[0]
+                self._descriptions.append(f"Difficulty: {difficulty}.")
 
         desc = soup.find(id="puzzle-newsletter")
-        if desc:
+        if isinstance(desc, Tag):
             if not self._preserve_html:
                 for a_tag in desc.find_all("a"):
                     a_tag.replace_with(a_tag.get_text())
@@ -154,15 +159,24 @@ class AVCXBaseDownloader(BaseDownloader):
 
         al_string = re.compile(".*AcrossLite.*")
         al_badge = soup.find("span", class_="badge", string=al_string)
-        if al_badge:
-            url = al_badge.parent.get("href")
+        if isinstance(al_badge, Tag):
+            badge_parent = al_badge.parent
+            # type checking: al_badge has a parent because it is not the root element
+            assert badge_parent is not None
+            url = badge_parent.get("href")
+            if not isinstance(url, str):
+                raise XWordDLException("AcrossLite badge did not contain URL.")
             return urljoin(self.base_url, url)
 
         # if AVCX doesn't have .puz, download JPZ and convert it (TODO)
         jpz_string = re.compile(".*JPZ.*")
         jpz_badge = soup.find("span", class_="badge", string=jpz_string)
-        if jpz_badge:
-            url = jpz_badge.parent.get("href")
+        if isinstance(jpz_badge, Tag):
+            badge_parent = jpz_badge.parent
+            assert badge_parent is not None
+            url = badge_parent.get("href")
+            if not isinstance(url, str):
+                raise XWordDLException("JPZ badge did not contain URL.")
             return urljoin(self.base_url, url)
 
         raise XWordDLException("Could not find valid puzzle file.")
@@ -177,12 +191,12 @@ class AVCXBaseDownloader(BaseDownloader):
 
         return res.content
 
-    def parse_xword(self, xword_data):
+    def parse_xword(self, xw_data):
         # This function can receive either PUZ files or JPZ
-        if xword_data[2:14] == b"ACROSS&DOWN\x00":
-            return self._parse_puz(xword_data)
-        elif xword_data[:5] == b"<?xml":
-            return self._parse_jpz(xword_data)
+        if xw_data[2:14] == b"ACROSS&DOWN\x00":
+            return self._parse_puz(xw_data)
+        elif xw_data[:5] == b"<?xml":
+            return self._parse_jpz(xw_data)
         else:
             raise XWordDLException("Invalid puzzle data.")
 
